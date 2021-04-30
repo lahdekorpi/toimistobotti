@@ -1,0 +1,24 @@
+{
+  "name": "toimistobotti",
+  "version": "1.0.0",
+  "description": "The one and only, the legend, the disruptor, the all-seeing eye, the master, the bot.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lahdekorpi/toimistobotti.git"
+  },
+  "author": "",
+  "license": "GPL-2.0-only",
+  "bugs": {
+    "url": "https://github.com/lahdekorpi/toimistobotti/issues"
+  },
+  "homepage": "https://github.com/lahdekorpi/toimistobotti#readme",
+  "dependencies": {
+    "@slack/events-api": "^3.0.0",
+    "@slack/web-api": "^6.1.0",
+    "mqtt": "^4.2.6"
+  }
+}
