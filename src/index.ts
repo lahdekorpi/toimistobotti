@@ -7,6 +7,7 @@ import * as mqtt from "mqtt";
 
 // Slack
 import { WebClient, WebAPICallResult } from "@slack/web-api";
+import { createEventAdapter } from "@slack/events-api";
 
 // // Slack auth
 // import * as passport from "passport";
@@ -133,4 +134,18 @@ interface ChatPostMessageResult extends WebAPICallResult {
 	console.log(
 		`A message was posed to conversation ${res.channel} with id ${res.ts} which contains the message ${res.message}`
 	);
+})();
+
+
+(async () => {
+const slackEvents = createEventAdapter(process.env.SLACK_SIGNING_SECRET);
+const port = parseInt(process.env.PORT, 10) || 3000;
+
+// Attach listeners to events by Slack Event "type". See: https://api.slack.com/events/message.im
+slackEvents.on("message", (event) => {
+  console.log(`Received a message event: user ${event.user} in channel ${event.channel} says ${event.text}`);
+});
+
+  const server = await slackEvents.start(port);
+  console.log(`Listening for events on ${server.address()}`);
 })();
