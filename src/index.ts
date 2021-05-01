@@ -136,8 +136,10 @@ interface ChatPostMessageResult extends WebAPICallResult {
 	);
 })();
 
+console.log("Got here for the events");
 
 (async () => {
+	console.log("Creating SlackEvents");
 const slackEvents = createEventAdapter(process.env.SLACK_SIGNING_SECRET);
 const port = parseInt(process.env.PORT, 10) || 3000;
 
@@ -146,6 +148,7 @@ slackEvents.on("message", (event) => {
   console.log(`Received a message event: user ${event.user} in channel ${event.channel} says ${event.text}`);
 });
 
+	console.log("Starting server");
   const server = await slackEvents.start(port);
   console.log(`Listening for events on ${server.address()}`);
 })();
