@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "tsc && node dist/index.js",
-    "watch": "tsc -w & nodemon -q -w dist/index.js",
+    "watch": "tsc -w & nodemon -q -w dist dist/index.js",
 		"build": "tsc --sourceMap false",
 		"watch-node": "echo 'IT IS npm run watch, you moron...' && npm run watch",
 		"lint": "tslint -c tslint.json -p tsconfig.json --fix"

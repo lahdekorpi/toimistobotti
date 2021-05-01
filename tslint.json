@@ -43,6 +43,7 @@
       "check-separator",
       "check-type"
     ],
+    "no-console": false,
     "no-internal-module": true,
     "no-trailing-whitespace": true,
     "no-null-keyword": true,
