@@ -1,0 +1,17 @@
+rfid:
+  555:
+    type: pir
+    name: Neukkari
+  123:
+    type: door
+    name: Ulko-ovi
+  456:
+    type: door
+    name: Toimiston ovi
+  789:
+    type: door
+    name: Sivuovi
+  999:
+    type: button
+    name: Ovikello
+    action: doorBell

@@ -1,6 +1,8 @@
 # Compiled version
 index.js
 
+# Config
+actions.yaml
 
 # Logs
 logs
