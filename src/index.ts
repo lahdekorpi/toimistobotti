@@ -386,7 +386,7 @@ async function sendLatestSequences(force = false) {
 				const result = await web.files.upload({
 					filename: latestRecording.metadata.key,
 					channels: process.env.SLACK_CHANNEL,
-					title: latestRecording.time,
+					title: `${latestRecording.time} - ${camera.name}`,
 					// You can use a ReadableStream or a Buffer for the file option
 					// This file is located in the current directory (`process.pwd()`), so the relative path resolves
 					file: res.data,
