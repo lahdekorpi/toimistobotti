@@ -36,7 +36,7 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 
 // Validate all reqeusts coming from Slack to be from Slack
-app.use((req, res, next) => {
+app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
 	const slackSignature = req.headers["x-slack-signature"];
 	const requestBody = qs.stringify(req.body, { format: "RFC1738" });
 	const timestamp = parseInt(
@@ -74,7 +74,7 @@ app.use((req, res, next) => {
 });
 
 // Attach the slash command handler
-app.post("/slack/huutele", (req, res) => {
+app.post("/slack/huutele", (req: express.Request, res: express.Response, next: express.NextFunction) => {
 	const status = setAlarm(true);
 	console.log("New status", status);
 	res.json({
@@ -83,7 +83,7 @@ app.post("/slack/huutele", (req, res) => {
 	});
 });
 
-app.post("/slack/stfu", (req, res) => {
+app.post("/slack/stfu", (req: express.Request, res: express.Response, next: express.NextFunction) => {
 	const status = setAlarm(false);
 	console.log("New status", status);
 	res.json({
@@ -92,7 +92,7 @@ app.post("/slack/stfu", (req, res) => {
 	});
 });
 
-app.post("/slack/kuva", (req, res) => {
+app.post("/slack/kuva", (req: express.Request, res: express.Response, next: express.NextFunction) => {
 	res.json({
 		response_type: "in_channel",
 		text: `@${req.body.user_name} Kuvat tulee kuha ehdin...`,
