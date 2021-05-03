@@ -25,29 +25,95 @@ import * as mqtt from "mqtt";
 
 // Slack
 import { WebClient, WebAPICallResult } from "@slack/web-api";
-import { createEventAdapter } from "@slack/events-api";
+import express from "express";
+import { createServer } from "http";
+import { createHmac, timingSafeEqual } from "crypto";
 
-// // Slack auth
-// import * as passport from "passport";
-// import { SlackStrategy } from "@aoberoi/passport-slack";
+import qs from "qs";
 
-// // Storage
-// import { LocalStorage } from "node-localstorage";
+const app = express();
 
-// // Express
-// import * as http from "http";
-// import express from "express";
+app.use(express.urlencoded({ extended: false }));
+
+// Validate all reqeusts coming from Slack to be from Slack
+app.use((req, res, next) => {
+	const slackSignature = req.headers["x-slack-signature"];
+	const requestBody = qs.stringify(req.body, { format: "RFC1738" });
+	const timestamp = parseInt(
+		req.headers["x-slack-request-timestamp"] as any,
+		10
+	);
+	console.log(req.headers["x-slack-request-timestamp"], timestamp);
+	const time = Math.floor(new Date().getTime() / 1000);
+	if (Math.abs(time - timestamp) > 300) {
+		console.warn("Ignoring request");
+		return res.status(400).send("Ignore this request.");
+	}
+	if (!process.env.SLACK_SIGNING_SECRET || typeof slackSignature !== "string") {
+		console.warn("Signing key is empty");
+		return res.status(400).send("Slack signing secret is empty.");
+	}
+	const sigBasestring = "v0:" + timestamp + ":" + requestBody;
+	const mySignature =
+		"v0=" +
+		createHmac("sha256", process.env.SLACK_SIGNING_SECRET)
+			.update(sigBasestring, "utf8")
+			.digest("hex");
+	if (
+		timingSafeEqual(
+			Buffer.from(mySignature, "utf8"),
+			Buffer.from(slackSignature, "utf8")
+		)
+	) {
+		console.log("Signature verification success");
+		next();
+	} else {
+		console.log("Signature verification failed");
+		return res.status(400).send("Verification failed");
+	}
+});
+
+// Attach the slash command handler
+app.post("/slack/huutele", (req, res) => {
+	const status = setAlarm(true);
+	console.log("New status", status);
+	res.json({
+		response_type: "in_channel",
+		text: `@${req.body.user_name} Ooookkei, huutelen kuha jotai tapahtuu... :eyes:`,
+	});
+});
+
+app.post("/slack/stfu", (req, res) => {
+	const status = setAlarm(false);
+	console.log("New status", status);
+	res.json({
+		response_type: "in_channel",
+		text: `@${req.body.user_name} Ooookkei, imma stfu`,
+	});
+});
+
+app.post("/slack/kuva", (req, res) => {
+	res.json({
+		response_type: "in_channel",
+		text: `@${req.body.user_name} Kuvat tulee kuha ehdin...`,
+	});
+});
+
+const port = process.env.PORT || 0;
+createServer(app).listen(port, () => {
+	console.log(`server listening on port ${port}`);
+});
 
 // Init MQTT and make sure it is listening to stuff
-console.log("Connecting");
+console.log("Connecting", process.env.MQTT);
 const client = mqtt.connect(process.env.MQTT);
 client.on("connect", () => {
 	console.log("MQTT connected");
-	client.subscribe("#", (err) => {
+	client.subscribe(process.env.MQTT_TOPIC, (err) => {
 		if (err) {
 			console.error("MQTT error", err);
 		} else {
-			console.log("Stuff");
+			console.log("MQTT subscribed");
 		}
 	});
 });
@@ -58,10 +124,24 @@ client.on("message", (topic, message) => {
 	console.log(message.toString());
 	// TODO:
 	// Parse JSON if the message contains JSON
+	let data: any = {};
+	try {
+		data = JSON.parse(message.toString());
+	} catch (e) {
+		console.error("Invalid JSON in MQTT payload");
+		return false;
+	}
+	console.log(data);
 	// Make sure the event is what we are looking for
+	if (
+		typeof data.RfReceived !== "object" ||
+		typeof data.RfReceived.Data !== "string"
+	) {
+		console.error("Data field in the JSON payload is missing");
+		return false;
+	}
 	// Make sure if receiving RF data, that the payload is in the known array
-	const rfid = "";
-	const event = actions.rfid[rfid];
+	const event = actions.rfid[data.RfReceived.Data];
 	if (typeof event === "object") {
 		switch (event.type) {
 			case "pir":
@@ -86,6 +166,24 @@ client.on("message", (topic, message) => {
 console.log("Creating Slack client with token", process.env.SLACK_TOKEN);
 const web = new WebClient(process.env.SLACK_TOKEN);
 
+web.chat.postMessage({
+	channel: process.env.SLACK_CHANNEL,
+	text: "Incoming",
+	username: "Toimisto",
+	subtype: "bot_message",
+	bot_id: process.env.SLACK_BOT_ID,
+	icon_emoji: "factory",
+	blocks: [
+		{
+			type: "header",
+			text: {
+				type: "plain_text",
+				text: ":rocket: Toimistobotti boottas!",
+				emoji: true,
+			},
+		},
+	],
+});
 interface ChatPostMessageResult extends WebAPICallResult {
 	channel: string;
 	ts: string;
@@ -95,106 +193,14 @@ interface ChatPostMessageResult extends WebAPICallResult {
 	blocks?: any;
 }
 
-(async () => {
-	// The result is cast to the interface
-	const res = (await web.chat.postMessage({
-		text: "Incoming",
-		username: "Toimisto",
-		subtype: "bot_message",
-		bot_id: process.env.SLACK_BOT_ID,
-		icon_emoji: "poop",
-		blocks: [
-			{
-				type: "header",
-				text: {
-					type: "plain_text",
-					text: "This is a header block",
-					emoji: true,
-				},
-			},
-			{
-				type: "divider",
-			},
-			{
-				type: "actions",
-				elements: [
-					{
-						type: "button",
-						text: {
-							type: "plain_text",
-							text: "Farmhouse",
-							emoji: true,
-						},
-						value: "click_me_123",
-					},
-					{
-						type: "button",
-						text: {
-							type: "plain_text",
-							text: "Kin Khao",
-							emoji: true,
-						},
-						value: "click_me_123",
-						url: "https://google.com",
-					},
-					{
-						type: "button",
-						text: {
-							type: "plain_text",
-							text: "Ler Ros",
-							emoji: true,
-						},
-						value: "click_me_123",
-						url: "https://google.com",
-					},
-				],
-			},
-			{
-				type: "section",
-				text: {
-					type: "mrkdwn",
-					text: "This is a section block with a button.",
-				},
-				accessory: {
-					type: "button",
-					text: {
-						type: "plain_text",
-						text: "Click Me",
-						emoji: true,
-					},
-					value: "click_me_123",
-					url: "https://google.com",
-					action_id: "button-action",
-				},
-			},
-		],
-		channel: process.env.SLACK_CHANNEL,
-	})) as ChatPostMessageResult;
-
-	// Properties of the result are now typed
-	console.log(
-		`A message was posed to conversation ${res.channel} with id ${res.ts} which contains the message ${res.message}`
-	);
-})();
-
-console.log("Got here for the events");
-
-(async () => {
-	console.log("Creating SlackEvents");
-	const slackEvents = createEventAdapter(process.env.SLACK_SIGNING_SECRET);
-	const port = parseInt(process.env.PORT, 10) || 3000;
-
-	// Attach listeners to events by Slack Event "type". See: https://api.slack.com/events/message.im
-	slackEvents.on("message", (event) => {
-		console.log(
-			`Received a message event: user ${event.user} in channel ${event.channel} says ${event.text}`
-		);
-	});
-
-	console.log("Starting server");
-	const server = await slackEvents.start(port);
-	console.log(`Listening for events on ${server.address()}`);
-})();
+const baseBot = {
+	channel: process.env.SLACK_CHANNEL,
+	text: "Incoming",
+	username: "Toimisto",
+	subtype: "bot_message",
+	bot_id: process.env.SLACK_BOT_ID,
+	icon_emoji: "factory"
+};
 
 // When a door sensor is triggered
 function doorOpen(name: string = "unknown") {
@@ -203,6 +209,29 @@ function doorOpen(name: string = "unknown") {
 	if (getAlarm()) {
 		console.log(`Door ${name} opened, alarming`);
 		// Send message to slack
+		web.chat.postMessage({
+			...baseBot,
+			blocks: [
+				{
+					type: "header",
+					text: {
+						type: "plain_text",
+						text: `Ovi avattu: ${name}`,
+						emoji: true,
+					},
+				},
+				{
+					type: "divider",
+				},
+				{
+					type: "section",
+					text: {
+						type: "plain_text",
+						text: "Kuva tulloo tänne kohta...",
+					},
+				},
+			],
+		});
 	} else {
 		console.log(`Door ${name} opened but alarm isn't set, so ignoring`);
 	}
@@ -214,6 +243,29 @@ function motionDetected(name: string = "unknown") {
 	if (getAlarm()) {
 		console.log(`Motion detected in ${name}, alarming`);
 		// Send message to slack
+		web.chat.postMessage({
+			...baseBot,
+			blocks: [
+				{
+					type: "header",
+					text: {
+						type: "plain_text",
+						text: `Liikettä havaittu: ${name}`,
+						emoji: true,
+					},
+				},
+				{
+					type: "divider",
+				},
+				{
+					type: "section",
+					text: {
+						type: "plain_text",
+						text: "Kuva tulloo tänne kohta...",
+					},
+				},
+			],
+		});
 	} else {
 		console.log(`Motion detected in ${name} but alarm isn't set, so ignoring`);
 	}
@@ -246,12 +298,15 @@ function getAlarm() {
 function setAlarm(status: boolean) {
 	try {
 		if (status) {
-			fs.unlinkSync(process.env.STATUS_FILE);
-		} else {
 			fs.writeFileSync(process.env.STATUS_FILE, new Date().toISOString());
+		} else {
+			fs.unlinkSync(process.env.STATUS_FILE);
 		}
 	} catch (e) {
 		console.error(e);
 	}
 	return status;
 }
+
+// TODO:
+// monitor for the latest available video with setInterval if we are alarmed and every time it changes, upload to Slack
