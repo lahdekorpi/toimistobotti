@@ -1,9 +1,20 @@
 // Conf
 import * as dotenv from "dotenv";
 dotenv.config({ path: __dirname + "/../.env" });
+
+// General
 import * as fs from "fs";
+import axios from "axios";
+
 interface Actions {
-	rfid: { [key: string]: RFID | ButtonRFID };
+	rfid?: { [key: string]: RFID | ButtonRFID };
+	cameras?: Camera[];
+}
+
+interface Camera {
+	name: string;
+	id: number;
+	api: string;
 }
 
 interface RFID {
@@ -17,8 +28,11 @@ interface ButtonRFID {
 	action: string; // Actions are only for the buttons
 }
 
+// Actions
 import YAML from "yaml";
 const actions: Actions = YAML.parse(fs.readFileSync("actions.yaml", "utf8"));
+let panicState = false;
+let panicTimer: NodeJS.Timeout;
 
 // MQTT
 import * as mqtt from "mqtt";
@@ -28,7 +42,6 @@ import { WebClient, WebAPICallResult } from "@slack/web-api";
 import express from "express";
 import { createServer } from "http";
 import { createHmac, timingSafeEqual } from "crypto";
-
 import qs from "qs";
 
 const app = express();
@@ -36,68 +49,83 @@ const app = express();
 app.use(express.urlencoded({ extended: false }));
 
 // Validate all reqeusts coming from Slack to be from Slack
-app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
-	const slackSignature = req.headers["x-slack-signature"];
-	const requestBody = qs.stringify(req.body, { format: "RFC1738" });
-	const timestamp = parseInt(
-		req.headers["x-slack-request-timestamp"] as any,
-		10
-	);
-	console.log(req.headers["x-slack-request-timestamp"], timestamp);
-	const time = Math.floor(new Date().getTime() / 1000);
-	if (Math.abs(time - timestamp) > 300) {
-		console.warn("Ignoring request");
-		return res.status(400).send("Ignore this request.");
+app.use(
+	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		const slackSignature = req.headers["x-slack-signature"];
+		const requestBody = qs.stringify(req.body, { format: "RFC1738" });
+		const timestamp = parseInt(
+			req.headers["x-slack-request-timestamp"] as any,
+			10
+		);
+		console.log(req.headers["x-slack-request-timestamp"], timestamp);
+		const time = Math.floor(new Date().getTime() / 1000);
+		if (Math.abs(time - timestamp) > 300) {
+			console.warn("Ignoring request");
+			return res.status(400).send("Ignore this request.");
+		}
+		if (
+			!process.env.SLACK_SIGNING_SECRET ||
+			typeof slackSignature !== "string"
+		) {
+			console.warn("Signing key is empty");
+			return res.status(400).send("Slack signing secret is empty.");
+		}
+		const sigBasestring = "v0:" + timestamp + ":" + requestBody;
+		const mySignature =
+			"v0=" +
+			createHmac("sha256", process.env.SLACK_SIGNING_SECRET)
+				.update(sigBasestring, "utf8")
+				.digest("hex");
+		if (
+			timingSafeEqual(
+				Buffer.from(mySignature, "utf8"),
+				Buffer.from(slackSignature, "utf8")
+			)
+		) {
+			console.log("Signature verification success");
+			next();
+		} else {
+			console.log("Signature verification failed");
+			return res.status(400).send("Verification failed");
+		}
 	}
-	if (!process.env.SLACK_SIGNING_SECRET || typeof slackSignature !== "string") {
-		console.warn("Signing key is empty");
-		return res.status(400).send("Slack signing secret is empty.");
-	}
-	const sigBasestring = "v0:" + timestamp + ":" + requestBody;
-	const mySignature =
-		"v0=" +
-		createHmac("sha256", process.env.SLACK_SIGNING_SECRET)
-			.update(sigBasestring, "utf8")
-			.digest("hex");
-	if (
-		timingSafeEqual(
-			Buffer.from(mySignature, "utf8"),
-			Buffer.from(slackSignature, "utf8")
-		)
-	) {
-		console.log("Signature verification success");
-		next();
-	} else {
-		console.log("Signature verification failed");
-		return res.status(400).send("Verification failed");
-	}
-});
+);
 
 // Attach the slash command handler
-app.post("/slack/huutele", (req: express.Request, res: express.Response, next: express.NextFunction) => {
-	const status = setAlarm(true);
-	console.log("New status", status);
-	res.json({
-		response_type: "in_channel",
-		text: `@${req.body.user_name} Ooookkei, huutelen kuha jotai tapahtuu... :eyes:`,
-	});
-});
+app.post(
+	"/slack/huutele",
+	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		const status = setAlarm(true);
+		console.log("New status", status);
+		res.json({
+			response_type: "in_channel",
+			text: `@${req.body.user_name} Ooookkei, huutelen kuha jotai tapahtuu... :eyes:`,
+		});
+	}
+);
 
-app.post("/slack/stfu", (req: express.Request, res: express.Response, next: express.NextFunction) => {
-	const status = setAlarm(false);
-	console.log("New status", status);
-	res.json({
-		response_type: "in_channel",
-		text: `@${req.body.user_name} Ooookkei, imma stfu`,
-	});
-});
+app.post(
+	"/slack/stfu",
+	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		const status = setAlarm(false);
+		console.log("New status", status);
+		res.json({
+			response_type: "in_channel",
+			text: `@${req.body.user_name} Ooookkei, imma stfu`,
+		});
+	}
+);
 
-app.post("/slack/kuva", (req: express.Request, res: express.Response, next: express.NextFunction) => {
-	res.json({
-		response_type: "in_channel",
-		text: `@${req.body.user_name} Kuvat tulee kuha ehdin...`,
-	});
-});
+app.post(
+	"/slack/kuva",
+	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		res.json({
+			response_type: "in_channel",
+			text: `@${req.body.user_name} Kuvat tulee kuha ehdin...`,
+		});
+		sendLatestSequences(true);
+	}
+);
 
 const port = process.env.PORT || 0;
 createServer(app).listen(port, () => {
@@ -122,7 +150,6 @@ client.on("message", (topic, message) => {
 	// message is Buffer
 	console.log("MQTT message:", topic);
 	console.log(message.toString());
-	// TODO:
 	// Parse JSON if the message contains JSON
 	let data: any = {};
 	try {
@@ -166,24 +193,24 @@ client.on("message", (topic, message) => {
 console.log("Creating Slack client with token", process.env.SLACK_TOKEN);
 const web = new WebClient(process.env.SLACK_TOKEN);
 
-web.chat.postMessage({
-	channel: process.env.SLACK_CHANNEL,
-	text: "Incoming",
-	username: "Toimisto",
-	subtype: "bot_message",
-	bot_id: process.env.SLACK_BOT_ID,
-	icon_emoji: "factory",
-	blocks: [
-		{
-			type: "header",
-			text: {
-				type: "plain_text",
-				text: ":rocket: Toimistobotti boottas!",
-				emoji: true,
-			},
-		},
-	],
-});
+// web.chat.postMessage({
+// 	channel: process.env.SLACK_CHANNEL,
+// 	text: "Incoming",
+// 	username: "Toimisto",
+// 	subtype: "bot_message",
+// 	bot_id: process.env.SLACK_BOT_ID,
+// 	icon_emoji: "factory",
+// 	blocks: [
+// 		{
+// 			type: "header",
+// 			text: {
+// 				type: "plain_text",
+// 				text: ":rocket: Toimistobotti boottas!",
+// 				emoji: true,
+// 			},
+// 		},
+// 	],
+// });
 interface ChatPostMessageResult extends WebAPICallResult {
 	channel: string;
 	ts: string;
@@ -199,12 +226,12 @@ const baseBot = {
 	username: "Toimisto",
 	subtype: "bot_message",
 	bot_id: process.env.SLACK_BOT_ID,
-	icon_emoji: "factory"
+	icon_emoji: "factory",
 };
 
 // When a door sensor is triggered
 function doorOpen(name: string = "unknown") {
-	// TODO:
+	panic();
 	// Check if we should alarm
 	if (getAlarm()) {
 		console.log(`Door ${name} opened, alarming`);
@@ -238,7 +265,7 @@ function doorOpen(name: string = "unknown") {
 }
 
 function motionDetected(name: string = "unknown") {
-	// TODO:
+	panic();
 	// Check if we should alarm
 	if (getAlarm()) {
 		console.log(`Motion detected in ${name}, alarming`);
@@ -308,5 +335,82 @@ function setAlarm(status: boolean) {
 	return status;
 }
 
-// TODO:
-// monitor for the latest available video with setInterval if we are alarmed and every time it changes, upload to Slack
+export interface Capture {
+	time: string;
+	src: string;
+	local_src: string;
+	metadata: Metadata;
+	type: string;
+}
+
+export interface Metadata {
+	key: string;
+	user: string;
+	timestamp: number;
+	microseconds: string;
+	instanceName: string;
+	regionCoordinates: string;
+	numberOfChanges: string;
+	token: string;
+}
+
+const cameras: { [key: string]: string } = {};
+
+async function sendLatestSequences(force = false) {
+	for (const camera of actions.cameras) {
+		console.log("Fetching for camera", camera.id);
+		const latestSequence = await axios.get(
+			`${camera.api}/api/v1/images/latest_sequence`,
+			{
+				auth: {
+					username: process.env[`CAM_USERNAME_${camera.id}`],
+					password: process.env[`CAM_PASSWORD_${camera.id}`],
+				},
+			}
+		);
+		const latestRecording = latestSequence.data.slice(-1)[0] as Capture;
+		if (
+			typeof cameras[camera.id] === "undefined" ||
+			cameras[camera.id] !== latestRecording.src ||
+			force
+		) {
+			// A new capture found!
+			cameras[camera.id] = latestRecording.src;
+			// Send media via Slack
+			axios({
+				method: "get",
+				url: latestRecording.src,
+				responseType: "stream",
+			}).then(async (res) => {
+				console.log("Starting to upload");
+				const result = await web.files.upload({
+					filename: latestRecording.metadata.key,
+					channels: process.env.SLACK_CHANNEL,
+					title: latestRecording.time,
+					// You can use a ReadableStream or a Buffer for the file option
+					// This file is located in the current directory (`process.pwd()`), so the relative path resolves
+					file: res.data,
+				});
+				console.log("Uploaded?", result.ok);
+			});
+		} else {
+			// An old capture, do nothing?
+		}
+	}
+}
+
+function panic() {
+	panicState = true;
+	clearTimeout(panicTimer);
+	panicTimer = setTimeout(() => {
+		console.log("We can now stop panicing as timeout has been reached...");
+		panicState = false;
+	}, 10_000);
+}
+
+setInterval(() => {
+	// Are we in panic mode? Should we upload every new capture?
+	if (panicState) {
+		sendLatestSequences();
+	}
+}, 10000);
