@@ -57,7 +57,6 @@ app.use(
 			req.headers["x-slack-request-timestamp"] as any,
 			10
 		);
-		console.log(req.headers["x-slack-request-timestamp"], timestamp);
 		const time = Math.floor(new Date().getTime() / 1000);
 		if (Math.abs(time - timestamp) > 300) {
 			console.warn("Ignoring request");
@@ -148,7 +147,7 @@ client.on("connect", () => {
 
 client.on("message", (topic, message) => {
 	// message is Buffer
-	console.log("MQTT message:", topic);
+	console.log("MQTT raw message on topic:", topic);
 	console.log(message.toString());
 	// Parse JSON if the message contains JSON
 	let data: any = {};
