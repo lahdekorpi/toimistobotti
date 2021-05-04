@@ -108,6 +108,8 @@ app.post(
 	(req: express.Request, res: express.Response, next: express.NextFunction) => {
 		const status = setAlarm(false);
 		console.log("New status", status);
+		clearTimeout(panicTimer);
+		panicState = false;
 		res.json({
 			response_type: "in_channel",
 			text: `@${req.body.user_name} Ooookkei, imma stfu`,
