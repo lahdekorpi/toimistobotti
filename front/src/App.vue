@@ -1,10 +1,10 @@
 <template>
-	<div v-if="loading" class="mt-5 md:mt-0 md:col-span-2">
+	<div v-if="loading" class="mt-5 md:mt-0 md:col-span-2 max-w-md mx-auto">
 		<div class="shadow overflow-hidden sm:rounded-md">
 			<div class="px-4 py-5 bg-white sm:p-6">Odota...</div>
 		</div>
 	</div>
-	<div v-else>
+	<div v-else class="max-w-md mx-auto">
 		<div v-if="loggedIn" class="mt-5 md:mt-0 md:col-span-2">
 			<div class="shadow overflow-hidden sm:rounded-md">
 				<div
