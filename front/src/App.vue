@@ -101,6 +101,7 @@ export default defineComponent({
 		if (password !== null) {
 			this.loggedIn = true;
 			this.password = password;
+			this.getStatus();
 		}
 	},
 	methods: {
@@ -112,13 +113,18 @@ export default defineComponent({
 					.then((res) => res.data);
 			} catch (e) {
 				console.error(e);
+				if (e.response.status === 403) {
+					this.password = "";
+					this.loggedIn = false;
+					window.localStorage.removeItem("password");
+				}
 			}
 			this.loading = false;
 		},
 		async enable() {
 			this.loading = true;
 			try {
-				await axios.post("/enable", { headers: { password: this.password } });
+				await axios.post("/enable", {}, { headers: { password: this.password } });
 			} catch (e) {
 				console.error(e);
 			}
@@ -127,7 +133,7 @@ export default defineComponent({
 		async disable() {
 			this.loading = true;
 			try {
-				await axios.post("/disable", { headers: { password: this.password } });
+				await axios.post("/disable", {}, { headers: { password: this.password } });
 			} catch (e) {
 				console.error(e);
 			}
