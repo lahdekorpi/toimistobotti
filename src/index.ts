@@ -48,6 +48,34 @@ const app = express();
 
 app.use(express.urlencoded({ extended: false }));
 
+app.use("/front", express.static("front/dist"));
+
+app.get("/wall/status", (req: express.Request, res: express.Response) => {
+	if (req.headers.password !== process.env.FRONT_PASSWORD) {
+		return res.sendStatus(403);
+	} else {
+		res.json({
+			enabled: getAlarm(),
+		});
+	}
+});
+
+app.post("/wall/enable", (req: express.Request, res: express.Response) => {
+	if (req.headers.password !== process.env.FRONT_PASSWORD) {
+		return res.sendStatus(403);
+	} else {
+		res.json(setAlarm(true));
+	}
+});
+
+app.post("/wall/disable", (req: express.Request, res: express.Response) => {
+	if (req.headers.password !== process.env.FRONT_PASSWORD) {
+		return res.sendStatus(403);
+	} else {
+		res.json(setAlarm(false));
+	}
+});
+
 // Validate all reqeusts coming from Slack to be from Slack
 app.use(
 	(req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -108,8 +136,6 @@ app.post(
 	(req: express.Request, res: express.Response, next: express.NextFunction) => {
 		const status = setAlarm(false);
 		console.log("New status", status);
-		clearTimeout(panicTimer);
-		panicState = false;
 		res.json({
 			response_type: "in_channel",
 			text: `@${req.body.user_name} Ooookkei, imma stfu`,
@@ -328,6 +354,8 @@ function setAlarm(status: boolean) {
 		if (status) {
 			fs.writeFileSync(process.env.STATUS_FILE, new Date().toISOString());
 		} else {
+			clearTimeout(panicTimer);
+			panicState = false;
 			fs.unlinkSync(process.env.STATUS_FILE);
 		}
 	} catch (e) {
@@ -371,8 +399,14 @@ async function sendLatestSequences(force = false) {
 				}
 			);
 			const latestRecording = latestSequence.data.slice(-1)[0] as Capture;
-			if (typeof latestRecording === "undefined" || typeof latestRecording.src !== "string") {
-				console.warn("Couldn't get the last recording. Sequence:", latestSequence);
+			if (
+				typeof latestRecording === "undefined" ||
+				typeof latestRecording.src !== "string"
+			) {
+				console.warn(
+					"Couldn't get the last recording. Sequence:",
+					latestSequence
+				);
 				return false;
 			}
 			if (
