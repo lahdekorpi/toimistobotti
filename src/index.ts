@@ -33,6 +33,7 @@ import YAML from "yaml";
 const actions: Actions = YAML.parse(fs.readFileSync("actions.yaml", "utf8"));
 let panicState = false;
 let panicTimer: NodeJS.Timeout;
+let timer: NodeJS.Timeout;
 
 // MQTT
 import * as mqtt from "mqtt";
@@ -118,10 +119,10 @@ app.use(
 	}
 );
 
-// Attach the slash command handler
 app.post(
 	"/slack/huutele",
 	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		clearTimeout(timer);
 		const status = setAlarm(true);
 		console.log("New status", status);
 		res.json({
@@ -132,8 +133,25 @@ app.post(
 );
 
 app.post(
+	"/slack/ajastin",
+	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		clearTimeout(timer);
+		console.log("Setting timer for 5 minutes");
+		timer = setTimeout(() => {
+			const status = setAlarm(true);
+			console.log("New status", status);
+		}, 600_000);
+		res.json({
+			response_type: "in_channel",
+			text: `@${req.body.user_name} Ooookkei, huutelen 5 minuutin kuluttua jos jotain sattuu :timer_clock:`,
+		});
+	}
+);
+
+app.post(
 	"/slack/stfu",
 	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		clearTimeout(timer);
 		const status = setAlarm(false);
 		console.log("New status", status);
 		res.json({
