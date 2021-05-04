@@ -329,7 +329,7 @@ function setAlarm(status: boolean) {
 			fs.unlinkSync(process.env.STATUS_FILE);
 		}
 	} catch (e) {
-		console.error(e);
+		// Just ignore
 	}
 	return status;
 }
@@ -356,60 +356,70 @@ export interface Metadata {
 const cameras: { [key: string]: string } = {};
 
 async function sendLatestSequences(force = false) {
-	for (const camera of actions.cameras) {
-		console.log("Fetching for camera", camera.id);
-		const latestSequence = await axios.get(
-			`${camera.api}/api/v1/images/latest_sequence`,
-			{
-				auth: {
-					username: process.env[`CAM_USERNAME_${camera.id}`],
-					password: process.env[`CAM_PASSWORD_${camera.id}`],
-				},
+	try {
+		for (const camera of actions.cameras) {
+			console.log("Fetching for camera", camera.id);
+			const latestSequence = await axios.get(
+				`${camera.api}/api/v1/images/latest_sequence`,
+				{
+					auth: {
+						username: process.env[`CAM_USERNAME_${camera.id}`],
+						password: process.env[`CAM_PASSWORD_${camera.id}`],
+					},
+				}
+			);
+			const latestRecording = latestSequence.data.slice(-1)[0] as Capture;
+			if (typeof latestRecording === "undefined" || typeof latestRecording.src !== "string") {
+				console.warn("Couldn't get the last recording. Sequence:", latestSequence);
+				return false;
 			}
-		);
-		const latestRecording = latestSequence.data.slice(-1)[0] as Capture;
-		if (
-			typeof cameras[camera.id] === "undefined" ||
-			cameras[camera.id] !== latestRecording.src ||
-			force
-		) {
-			// A new capture found!
-			cameras[camera.id] = latestRecording.src;
-			// Send media via Slack
-			axios({
-				method: "get",
-				url: latestRecording.src,
-				responseType: "stream",
-			}).then(async (res) => {
-				console.log("Starting to upload");
-				const result = await web.files.upload({
-					filename: latestRecording.metadata.key,
-					channels: process.env.SLACK_CHANNEL,
-					title: `${latestRecording.time} - ${camera.name}`,
-					// You can use a ReadableStream or a Buffer for the file option
-					// This file is located in the current directory (`process.pwd()`), so the relative path resolves
-					file: res.data,
+			if (
+				typeof cameras[camera.id] === "undefined" ||
+				cameras[camera.id] !== latestRecording.src ||
+				force
+			) {
+				// A new capture found!
+				cameras[camera.id] = latestRecording.src;
+				// Send media via Slack
+				axios({
+					method: "get",
+					url: latestRecording.src,
+					responseType: "stream",
+				}).then(async (res) => {
+					console.log("Starting to upload");
+					const result = await web.files.upload({
+						filename: latestRecording.metadata.key,
+						channels: process.env.SLACK_CHANNEL,
+						title: `${latestRecording.time} - ${camera.name}`,
+						// You can use a ReadableStream or a Buffer for the file option
+						// This file is located in the current directory (`process.pwd()`), so the relative path resolves
+						file: res.data,
+					});
+					console.log("Uploaded?", result.ok);
 				});
-				console.log("Uploaded?", result.ok);
-			});
-		} else {
-			// An old capture, do nothing?
+			} else {
+				// An old capture, do nothing?
+			}
 		}
+	} catch (e) {
+		console.error(e);
 	}
 }
 
 function panic() {
+	console.log("Entering panic state");
 	panicState = true;
 	clearTimeout(panicTimer);
 	panicTimer = setTimeout(() => {
 		console.log("We can now stop panicing as timeout has been reached...");
 		panicState = false;
-	}, 10_000);
+	}, 60_000);
 }
 
 setInterval(() => {
 	// Are we in panic mode? Should we upload every new capture?
 	if (panicState) {
+		console.log("We are in panic state, sending latest sequence");
 		sendLatestSequences();
 	}
-}, 10000);
+}, 30_000);
