@@ -133,18 +133,35 @@ app.post(
 );
 
 app.post(
-	"/slack/ajastin",
+	"/slack/tila",
 	(req: express.Request, res: express.Response, next: express.NextFunction) => {
-		clearTimeout(timer);
-		console.log("Setting timer for 5 minutes");
-		timer = setTimeout(() => {
-			const status = setAlarm(true);
-			console.log("New status", status);
-		}, 600_000);
 		res.json({
 			response_type: "in_channel",
-			text: `@${req.body.user_name} Ooookkei, huutelen 5 minuutin kuluttua jos jotain sattuu :timer_clock:`,
+			text: `@${req.body.user_name} Botin valvontatila: ${(getAlarm() ? "Päällä :white_check_mark:" : "Pois :no_entry_sign:")}`
 		});
+	}
+);
+
+app.post(
+	"/slack/ajastin",
+	(req: express.Request, res: express.Response, next: express.NextFunction) => {
+		if (getAlarm()) {
+			res.json({
+				response_type: "in_channel",
+				text: `Mitä vittua kohellat nyt @${req.body.user_name}, valvonta on jo päällä... :facepalm:`
+			});
+		} else {
+			clearTimeout(timer);
+			console.log("Setting timer for 5 minutes");
+			timer = setTimeout(() => {
+				const status = setAlarm(true);
+				console.log("New status", status);
+			}, 600_000);
+			res.json({
+				response_type: "in_channel",
+				text: `@${req.body.user_name} Ooookkei, huutelen 5 minuutin kuluttua jos jotain sattuu :timer_clock:`,
+			});
+		}
 	}
 );
 
