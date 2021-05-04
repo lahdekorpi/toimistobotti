@@ -230,10 +230,10 @@ const baseBot = {
 
 // When a door sensor is triggered
 function doorOpen(name: string = "unknown") {
-	panic();
 	// Check if we should alarm
 	if (getAlarm()) {
 		console.log(`Door ${name} opened, alarming`);
+		panic();
 		// Send message to slack
 		web.chat.postMessage({
 			...baseBot,
@@ -264,10 +264,10 @@ function doorOpen(name: string = "unknown") {
 }
 
 function motionDetected(name: string = "unknown") {
-	panic();
 	// Check if we should alarm
 	if (getAlarm()) {
 		console.log(`Motion detected in ${name}, alarming`);
+		panic();
 		// Send message to slack
 		web.chat.postMessage({
 			...baseBot,
@@ -406,6 +406,7 @@ async function sendLatestSequences(force = false) {
 	}
 }
 
+// We enter a panic mode for 5 minutes and during that time, we send all new captured media every 30 seconds
 function panic() {
 	console.log("Entering panic state");
 	panicState = true;
@@ -413,7 +414,7 @@ function panic() {
 	panicTimer = setTimeout(() => {
 		console.log("We can now stop panicing as timeout has been reached...");
 		panicState = false;
-	}, 60_000);
+	}, 600_000);
 }
 
 setInterval(() => {
