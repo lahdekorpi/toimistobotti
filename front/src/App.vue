@@ -107,7 +107,7 @@ export default defineComponent({
 			if (this.loggedIn) {
 				this.getStatus();
 			}
-		}, 10_000);
+		}, 5_000);
 	},
 	methods: {
 		async getStatus() {
