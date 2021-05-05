@@ -105,14 +105,16 @@ export default defineComponent({
 		}
 		setInterval(() => {
 			if (this.loggedIn) {
-				this.getStatus();
+				this.getStatus(true);
 			}
 		}, 5_000);
 	},
 	methods: {
-		async getStatus() {
+		async getStatus(silent = false) {
 			try {
-				this.loading = true;
+				if (!silent) {
+					this.loading = true;
+				}
 				this.status = await axios
 					.get("/status", { headers: { password: this.password } })
 					.then((res) => res.data);
@@ -124,7 +126,9 @@ export default defineComponent({
 					window.localStorage.removeItem("password");
 				}
 			}
-			this.loading = false;
+			if (!silent) {
+				this.loading = false;
+			}
 		},
 		async enable() {
 			this.loading = true;
