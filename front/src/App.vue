@@ -103,6 +103,11 @@ export default defineComponent({
 			this.password = password;
 			this.getStatus();
 		}
+		setInterval(() => {
+			if (this.loggedIn) {
+				this.getStatus();
+			}
+		}, 10_000);
 	},
 	methods: {
 		async getStatus() {
@@ -124,7 +129,11 @@ export default defineComponent({
 		async enable() {
 			this.loading = true;
 			try {
-				await axios.post("/enable", {}, { headers: { password: this.password } });
+				await axios.post(
+					"/enable",
+					{},
+					{ headers: { password: this.password } }
+				);
 			} catch (e) {
 				console.error(e);
 			}
@@ -133,7 +142,11 @@ export default defineComponent({
 		async disable() {
 			this.loading = true;
 			try {
-				await axios.post("/disable", {}, { headers: { password: this.password } });
+				await axios.post(
+					"/disable",
+					{},
+					{ headers: { password: this.password } }
+				);
 			} catch (e) {
 				console.error(e);
 			}
