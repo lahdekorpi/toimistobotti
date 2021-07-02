@@ -255,24 +255,28 @@ client.on("message", (topic, message) => {
 console.log("Creating Slack client with token", process.env.SLACK_TOKEN);
 const web = new WebClient(process.env.SLACK_TOKEN);
 
-web.chat.postMessage({
-	channel: process.env.SLACK_CHANNEL,
-	text: "Incoming",
-	username: "Toimisto",
-	subtype: "bot_message",
-	bot_id: process.env.SLACK_BOT_ID,
-	icon_emoji: "factory",
-	blocks: [
-		{
-			type: "header",
-			text: {
-				type: "plain_text",
-				text: ":rocket: Toimistobotti boottas!",
-				emoji: true,
+try {
+	web.chat.postMessage({
+		channel: process.env.SLACK_CHANNEL,
+		text: "Incoming",
+		username: "Toimisto",
+		//subtype: "bot_message",
+		bot_id: process.env.SLACK_BOT_ID,
+		icon_emoji: "factory",
+		blocks: [
+			{
+				type: "header",
+				text: {
+					type: "plain_text",
+					text: ":rocket: Toimistobotti boottas!",
+					emoji: true,
+				},
 			},
-		},
-	],
-});
+		],
+	});
+} catch(e) {
+	console.error(e);
+}
 interface ChatPostMessageResult extends WebAPICallResult {
 	channel: string;
 	ts: string;
@@ -286,7 +290,7 @@ const baseBot = {
 	channel: process.env.SLACK_CHANNEL,
 	text: "Incoming",
 	username: "Toimisto",
-	subtype: "bot_message",
+	//subtype: "bot_message",
 	bot_id: process.env.SLACK_BOT_ID,
 	icon_emoji: "factory",
 };
