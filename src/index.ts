@@ -15,6 +15,7 @@ interface Camera {
 	name: string;
 	id: number;
 	api: string;
+	snapshot?: string;
 }
 
 interface RFID {
@@ -26,6 +27,7 @@ interface ButtonRFID {
 	name?: string;
 	type: "button";
 	action: string; // Actions are only for the buttons
+	meta?: any;
 }
 
 // Actions
@@ -256,24 +258,26 @@ console.log("Creating Slack client with token", process.env.SLACK_TOKEN);
 const web = new WebClient(process.env.SLACK_TOKEN);
 
 try {
-	web.chat.postMessage({
-		channel: process.env.SLACK_CHANNEL,
-		text: "Incoming",
-		username: "Toimisto",
-		//subtype: "bot_message",
-		bot_id: process.env.SLACK_BOT_ID,
-		icon_emoji: "factory",
-		blocks: [
-			{
-				type: "header",
-				text: {
-					type: "plain_text",
-					text: ":rocket: Toimistobotti boottas!",
-					emoji: true,
+	if(process.env.SILENT_BOOT !== "true") {
+		web.chat.postMessage({
+			channel: process.env.SLACK_CHANNEL,
+			text: "Incoming",
+			username: "Toimisto",
+			//subtype: "bot_message",
+			bot_id: process.env.SLACK_BOT_ID,
+			icon_emoji: "factory",
+			blocks: [
+				{
+					type: "header",
+					text: {
+						type: "plain_text",
+						text: ":rocket: Toimistobotti boottas!",
+						emoji: true,
+					},
 				},
-			},
-		],
-	});
+			],
+		});
+	}
 } catch(e) {
 	console.error(e);
 }
@@ -367,7 +371,7 @@ function motionDetected(name: string = "unknown") {
 function buttonPress(event: ButtonRFID) {
 	switch (event.action) {
 		case "doorBell":
-			doorBell();
+			doorBell(event.meta);
 			break;
 		default:
 			console.warn(`Unknown action ${event.action}`);
@@ -376,10 +380,33 @@ function buttonPress(event: ButtonRFID) {
 }
 
 // Run if the doorbell has been pressed
-function doorBell() {
+function doorBell(meta: { camera: number; }) {
 	// TODO:
 	// Doorbell pressed, take an image from the front door camera and send to Slack
 	// Trigger a MQTT event to trigger additional stuff if needed
+	try {
+		web.chat.postMessage({
+			channel: process.env.SLACK_CHANNEL,
+			text: "Ovikello",
+			username: "Toimisto",
+			//subtype: "bot_message",
+			bot_id: process.env.SLACK_BOT_ID,
+			icon_emoji: "factory",
+			blocks: [
+				{
+					type: "header",
+					text: {
+						type: "plain_text",
+						text: ":bell: Ovikello soi!",
+						emoji: true,
+					},
+				},
+			],
+		});
+	} catch(e) {
+		console.error(e);
+	}
+	snapshotFromCamera(meta.camera);
 }
 
 // Get the current alarmed status
@@ -477,7 +504,40 @@ async function sendLatestSequences(force = false) {
 			}
 		}
 	} catch (e) {
-		console.error(e);
+		console.error(e.message);
+	}
+}
+
+async function snapshotFromCamera(id: number) {
+	try {
+			const camera: Camera = actions.cameras.find(camera => id === camera.id);
+			console.log(camera, id, actions.cameras);
+			console.log("Fetching snapshot from camera", id, camera.name);
+
+				// Send media via Slack
+				axios({
+					method: "get",
+					url: camera.snapshot,
+					responseType: "stream",
+					auth: {
+						username: process.env[`CAM_USERNAME_${camera.id}`],
+						password: process.env[`CAM_PASSWORD_${camera.id}`],
+					},
+				}).then(async (res) => {
+					console.log("Starting to upload");
+					const result = await web.files.upload({
+						filename: `${(new Date()).toISOString()}.jpg`,
+						channels: process.env.SLACK_CHANNEL,
+						title: `Ovikello soi`,
+						// You can use a ReadableStream or a Buffer for the file option
+						// This file is located in the current directory (`process.pwd()`), so the relative path resolves
+						file: res.data,
+					});
+					console.log("Uploaded?", result.ok);
+				});
+			
+	} catch (e) {
+		console.error(e.message);
 	}
 }
 
